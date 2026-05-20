@@ -29,6 +29,9 @@ pub struct PdfPayload {
     pub empresa_endereco: String,
     pub empresa_logo_base64: String,
     pub rodape_texto: String,
+    pub assinatura_imagem: String,
+    pub assinatura_nome: String,
+    pub assinatura_cargo: String,
 }
 
 #[command]
@@ -219,16 +222,57 @@ pub fn generate_pdf(payload: PdfPayload) -> Result<Vec<u8>, String> {
         "Declaro ter recebido os itens listados acima em perfeito estado:",
         9.0, Mm(margin_left), Mm(y), &font_regular,
     );
-    y -= 18.0;
+    y -= 3.0;
+
+    // Imagem de assinatura coletada na entrega (PWA)
+    if !payload.assinatura_imagem.is_empty() {
+        let b64 = if let Some(pos) = payload.assinatura_imagem.find(',') {
+            &payload.assinatura_imagem[pos + 1..]
+        } else {
+            &payload.assinatura_imagem
+        };
+        if let Ok(bytes) = general_purpose::STANDARD.decode(b64) {
+            if let Ok(reader) = ::image::io::Reader::new(Cursor::new(bytes)).with_guessed_format() {
+                if let Ok(dyn_img) = reader.decode() {
+                    let sig = dyn_img.thumbnail(220, 55);
+                    let (w_px, h_px) = (sig.width() as f32, sig.height() as f32);
+                    let dpi = 150.0_f32;
+                    let w_mm = w_px / dpi * 25.4;
+                    let h_mm = h_px / dpi * 25.4;
+                    let sig_img = Image::from_dynamic_image(&sig);
+                    sig_img.add_to_layer(
+                        current_layer.clone(),
+                        ImageTransform {
+                            translate_x: Some(Mm(margin_left)),
+                            translate_y: Some(Mm(y - h_mm)),
+                            dpi: Some(dpi),
+                            ..Default::default()
+                        },
+                    );
+                    y -= h_mm + 3.0;
+                    let _ = w_mm;
+                } else { y -= 15.0; }
+            } else { y -= 15.0; }
+        } else { y -= 15.0; }
+    } else {
+        y -= 15.0;
+    }
 
     draw_line(&current_layer, margin_left, y, 90.0_f32, y);
-    current_layer.use_text(
-        "Assinatura do Destinatário", 7.0, Mm(margin_left), Mm(y - 4.0), &font_regular,
-    );
+    let sig_label = if !payload.assinatura_nome.is_empty() {
+        if !payload.assinatura_cargo.is_empty() {
+            format!("{} - {}", payload.assinatura_nome, payload.assinatura_cargo)
+        } else {
+            payload.assinatura_nome.clone()
+        }
+    } else {
+        String::from("Assinatura do Destinatario")
+    };
+    current_layer.use_text(sig_label.as_str(), 7.0, Mm(margin_left), Mm(y - 4.0), &font_regular);
 
     draw_line(&current_layer, 115.0_f32, y, margin_right, y);
     current_layer.use_text(
-        "Responsável pela Empresa", 7.0, Mm(115.0_f32), Mm(y - 4.0), &font_regular,
+        "Responsavel pela Empresa", 7.0, Mm(115.0_f32), Mm(y - 4.0), &font_regular,
     );
 
     // ── RODAPÉ ────────────────────────────────────────────────────────────────

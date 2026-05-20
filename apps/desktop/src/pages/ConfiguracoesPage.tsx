@@ -117,7 +117,9 @@ export default function ConfiguracoesPage() {
       if (erros === 0) {
         toast.success(`Re-sync concluído: ${count} registros enviados ao backend`);
       } else {
-        toast.warning(`Re-sync parcial: ${count} enfileirados, ${erros} erro(s). Verifique a conexão.`);
+        const preview = result.push.erros.slice(0, 2).join(" | ");
+        toast.warning(`Re-sync parcial: ${erros} erro(s) — ${preview}`, { duration: 12000 });
+        console.error("[Sync erros]", result.push.erros);
       }
       await verificarPendentes();
     } catch (e) {

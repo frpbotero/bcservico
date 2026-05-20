@@ -53,48 +53,81 @@ export class SyncService {
           create: data,
           update,
         });
+
       case 'usuarios':
         return this.prisma.usuario.upsert({
           where: { id: entidade_id },
           create: data,
           update,
+        }).catch(async (e: any) => {
+          if (e?.code !== 'P2002') throw e;
+          // Login já existe com outro ID (ex: seed do backend vs. desktop)
+          await this.prisma.usuario.updateMany({
+            where: { login: data.login },
+            data: update,
+          });
         });
+
       case 'clientes':
         return this.prisma.cliente.upsert({
           where: { id: entidade_id },
           create: data,
           update,
+        }).catch(async (e: any) => {
+          if (e?.code !== 'P2002') throw e;
+          await this.prisma.cliente.updateMany({
+            where: { cnpj_cpf: data.cnpj_cpf },
+            data: update,
+          });
         });
+
       case 'produtos':
         return this.prisma.produto.upsert({
           where: { id: entidade_id },
           create: data,
           update,
         });
+
       case 'cautelas':
         return this.prisma.cautela.upsert({
           where: { id: entidade_id },
           create: data,
           update,
+        }).catch(async (e: any) => {
+          if (e?.code !== 'P2002') throw e;
+          await this.prisma.cautela.updateMany({
+            where: { numero: data.numero },
+            data: update,
+          });
         });
+
       case 'cautela_itens':
         return this.prisma.cautelaItem.upsert({
           where: { id: entidade_id },
           create: data,
           update,
         });
+
       case 'recibos':
         return this.prisma.recibo.upsert({
           where: { id: entidade_id },
           create: data,
           update,
+        }).catch(async (e: any) => {
+          if (e?.code !== 'P2002') throw e;
+          await this.prisma.recibo.updateMany({
+            where: { numero: data.numero },
+            data: update,
+          });
         });
+
       case 'recibo_itens':
         return this.prisma.reciboItem.upsert({
           where: { id: entidade_id },
           create: data,
           update,
         });
+
       default:
         throw new Error(`Entidade desconhecida: ${entidade}`);
     }

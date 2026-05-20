@@ -251,13 +251,21 @@ export async function forcarResyncCompleto(): Promise<number> {
   const cautelas = await database.select<Cautela[]>(`SELECT * FROM cautelas WHERE deletado_em IS NULL`);
   for (const c of cautelas) { await enqueueSync("cautelas", c.id, "create", c); count++; }
 
-  const itens = await database.select<CautelaItem[]>(`SELECT * FROM cautela_itens`);
+  const itens = await database.select<CautelaItem[]>(
+    `SELECT ci.* FROM cautela_itens ci
+     JOIN cautelas c ON c.id = ci.cautela_id
+     WHERE c.deletado_em IS NULL`
+  );
   for (const i of itens) { await enqueueSync("cautela_itens", i.id, "create", i); count++; }
 
   const recibos = await database.select<Recibo[]>(`SELECT * FROM recibos WHERE deletado_em IS NULL`);
   for (const r of recibos) { await enqueueSync("recibos", r.id, "create", r); count++; }
 
-  const reciboItens = await database.select<ReciboItem[]>(`SELECT * FROM recibo_itens`);
+  const reciboItens = await database.select<ReciboItem[]>(
+    `SELECT ri.* FROM recibo_itens ri
+     JOIN recibos r ON r.id = ri.recibo_id
+     WHERE r.deletado_em IS NULL`
+  );
   for (const ri of reciboItens) { await enqueueSync("recibo_itens", ri.id, "create", ri); count++; }
 
   return count;

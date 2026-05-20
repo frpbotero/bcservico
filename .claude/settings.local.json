@@ -32,7 +32,9 @@
       "Bash(dir \"%APPDATA%\\\\App Cautelas\")",
       "Bash(dir \"%APPDATA%\")",
       "Bash(findstr -i \"cautela\")",
-      "Bash(dir \"%LOCALAPPDATA%\")"
+      "Bash(dir \"%LOCALAPPDATA%\")",
+      "Bash(pnpm --filter backend build)",
+      "Bash(cargo check *)"
     ]
   }
 }

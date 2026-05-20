@@ -36,6 +36,9 @@ export async function gerarPdfCautela(payload: PdfPayload): Promise<string | nul
       empresa_endereco: formatarEnderecoEmpresa(payload.empresa),
       empresa_logo_base64: payload.empresa.logotipo ?? "",
       rodape_texto: payload.empresa.texto_rodape ?? "",
+      assinatura_imagem: payload.cautela.assinatura_imagem ?? "",
+      assinatura_nome: payload.cautela.assinatura_nome ?? "",
+      assinatura_cargo: payload.cautela.assinatura_cargo ?? "",
     },
   });
 
