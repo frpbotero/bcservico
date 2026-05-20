@@ -1,0 +1,28 @@
+[package]
+name = "app-cautelas"
+version = "0.1.0"
+description = "App Cautelas - Sistema de Gestão de Cautelas, Orçamentos e Recibos"
+authors = ["Botero"]
+edition = "2021"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bcrypt = "0.15"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+printpdf = { version = "0.7", features = ["embedded_images"] }
+image = "0.24"
+base64 = "0.22"

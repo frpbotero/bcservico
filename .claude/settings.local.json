@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --version)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(cd \"/c/Users/Felipe Botero/Documents/EU/Pai/App_cautelas\" && ls)",
+      "Bash(pnpm install *)"
+    ]
+  }
+}
