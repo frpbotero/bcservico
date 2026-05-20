@@ -11,7 +11,7 @@ RUN npx prisma generate
 
 COPY . .
 
-RUN npx tsc -p tsconfig.json && test -f dist/main.js
+RUN npx tsc -p tsconfig.build.json && test -f dist/main.js
 
 # ---- Production ----
 FROM node:20-alpine AS production
