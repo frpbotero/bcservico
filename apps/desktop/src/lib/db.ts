@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS sync_config (
 );
 
 INSERT OR IGNORE INTO sync_config (id, backend_url, backend_login, backend_senha, last_pull_at)
-VALUES ('default', '', '', '', '1970-01-01T00:00:00.000Z');
+VALUES ('default', 'https://bcservico.onrender.com', '', '', '1970-01-01T00:00:00.000Z');
 
 CREATE INDEX IF NOT EXISTS idx_cautelas_status ON cautelas(status);
 CREATE INDEX IF NOT EXISTS idx_cautelas_cliente ON cautelas(cliente_id);
