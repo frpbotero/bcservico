@@ -9,6 +9,8 @@ const ENTITY_ORDER = [
   'produtos',
   'cautelas',
   'cautela_itens',
+  'recibos',
+  'recibo_itens',
 ];
 
 @Injectable()
@@ -81,6 +83,18 @@ export class SyncService {
           create: data,
           update,
         });
+      case 'recibos':
+        return this.prisma.recibo.upsert({
+          where: { id: entidade_id },
+          create: data,
+          update,
+        });
+      case 'recibo_itens':
+        return this.prisma.reciboItem.upsert({
+          where: { id: entidade_id },
+          create: data,
+          update,
+        });
       default:
         throw new Error(`Entidade desconhecida: ${entidade}`);
     }
@@ -103,6 +117,10 @@ export class SyncService {
         return this.prisma.cautela.update({ where: { id }, data });
       case 'cautela_itens':
         return this.prisma.cautelaItem.delete({ where: { id } });
+      case 'recibos':
+        return this.prisma.recibo.update({ where: { id }, data });
+      case 'recibo_itens':
+        return this.prisma.reciboItem.delete({ where: { id } });
       default:
         throw new Error(`Entidade desconhecida: ${entidade}`);
     }

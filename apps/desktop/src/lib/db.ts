@@ -163,6 +163,53 @@ CREATE TABLE IF NOT EXISTS sequencias (
   ultimo_numero INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS recibos (
+  id TEXT PRIMARY KEY,
+  numero TEXT NOT NULL UNIQUE,
+  data TEXT NOT NULL,
+  cliente_id TEXT NOT NULL REFERENCES clientes(id),
+  usuario_emissor_id TEXT NOT NULL REFERENCES usuarios(id),
+  forma_pagamento TEXT NOT NULL,
+  forma_pagamento_outro TEXT,
+  total_geral REAL NOT NULL DEFAULT 0,
+  observacoes TEXT,
+  status TEXT NOT NULL DEFAULT 'emitido' CHECK(status IN ('emitido','cancelado')),
+  cancelamento_motivo TEXT,
+  cancelado_em TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  deletado_em TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'pendente_sync',
+  sync_at TEXT,
+  criado_por TEXT REFERENCES usuarios(id)
+);
+
+CREATE TABLE IF NOT EXISTS recibo_itens (
+  id TEXT PRIMARY KEY,
+  recibo_id TEXT NOT NULL REFERENCES recibos(id) ON DELETE CASCADE,
+  produto_id TEXT NOT NULL REFERENCES produtos(id),
+  quantidade REAL NOT NULL CHECK(quantidade > 0),
+  valor_unitario REAL NOT NULL CHECK(valor_unitario >= 0),
+  valor_total REAL NOT NULL DEFAULT 0,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  criado_por TEXT REFERENCES usuarios(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recibos_status ON recibos(status);
+CREATE INDEX IF NOT EXISTS idx_recibos_cliente ON recibos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_recibo_itens_recibo ON recibo_itens(recibo_id);
+
+CREATE TABLE IF NOT EXISTS sync_config (
+  id TEXT PRIMARY KEY,
+  backend_url TEXT NOT NULL DEFAULT '',
+  backend_login TEXT NOT NULL DEFAULT '',
+  backend_senha TEXT NOT NULL DEFAULT '',
+  last_pull_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
+);
+
+INSERT OR IGNORE INTO sync_config (id, backend_url, backend_login, backend_senha, last_pull_at)
+VALUES ('default', '', '', '', '1970-01-01T00:00:00.000Z');
+
 CREATE INDEX IF NOT EXISTS idx_cautelas_status ON cautelas(status);
 CREATE INDEX IF NOT EXISTS idx_cautelas_cliente ON cautelas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_cautela_itens_cautela ON cautela_itens(cautela_id);
@@ -175,6 +222,50 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_login ON usuarios(login);
 export async function initDb(): Promise<void> {
   const database = await getDb();
   await database.execute(SCHEMA_SQL);
+  await _seedAdminSeNecessario();
+}
+
+export async function forcarResyncCompleto(): Promise<number> {
+  const database = await getDb();
+  let count = 0;
+
+  const empresas = await database.select<EmpresaEmissora[]>(`SELECT * FROM empresa_emissora WHERE deletado_em IS NULL`);
+  for (const e of empresas) { await enqueueSync("empresa_emissora", e.id, "create", e); count++; }
+
+  const usuarios = await database.select<Usuario[]>(`SELECT * FROM usuarios WHERE deletado_em IS NULL`);
+  for (const u of usuarios) { await enqueueSync("usuarios", u.id, "create", u); count++; }
+
+  const clientes = await database.select<Cliente[]>(`SELECT * FROM clientes WHERE deletado_em IS NULL`);
+  for (const c of clientes) { await enqueueSync("clientes", c.id, "create", c); count++; }
+
+  const produtos = await database.select<Produto[]>(`SELECT * FROM produtos WHERE deletado_em IS NULL`);
+  for (const p of produtos) { await enqueueSync("produtos", p.id, "create", p); count++; }
+
+  const cautelas = await database.select<Cautela[]>(`SELECT * FROM cautelas WHERE deletado_em IS NULL`);
+  for (const c of cautelas) { await enqueueSync("cautelas", c.id, "create", c); count++; }
+
+  const itens = await database.select<CautelaItem[]>(`SELECT * FROM cautela_itens`);
+  for (const i of itens) { await enqueueSync("cautela_itens", i.id, "create", i); count++; }
+
+  const recibos = await database.select<Recibo[]>(`SELECT * FROM recibos WHERE deletado_em IS NULL`);
+  for (const r of recibos) { await enqueueSync("recibos", r.id, "create", r); count++; }
+
+  const reciboItens = await database.select<ReciboItem[]>(`SELECT * FROM recibo_itens`);
+  for (const ri of reciboItens) { await enqueueSync("recibo_itens", ri.id, "create", ri); count++; }
+
+  return count;
+}
+
+async function _seedAdminSeNecessario(): Promise<void> {
+  const login = import.meta.env.VITE_ADMIN_LOGIN as string | undefined;
+  const senha = import.meta.env.VITE_ADMIN_SENHA as string | undefined;
+  if (!login || !senha) return;
+
+  const count = await countUsuarios();
+  if (count > 0) return;
+
+  const { criarPrimeiroAdmin } = await import("./auth");
+  await criarPrimeiroAdmin({ nome_completo: login, login, senha });
 }
 
 // ---------- SYNC QUEUE ----------
@@ -607,11 +698,14 @@ export async function createCautela(
     ]
   );
   for (const item of data.itens) {
+    const itemId = uuidv4();
     await database.execute(
       `INSERT INTO cautela_itens (id, cautela_id, produto_id, quantidade, observacao, criado_por)
        VALUES (?,?,?,?,?,?)`,
-      [uuidv4(), id, item.produto_id, item.quantidade, item.observacao ?? null, usuarioId]
+      [itemId, id, item.produto_id, item.quantidade, item.observacao ?? null, usuarioId]
     );
+    const itemRow = (await database.select<CautelaItem[]>(`SELECT * FROM cautela_itens WHERE id=?`, [itemId]))[0];
+    await enqueueSync("cautela_itens", itemId, "create", itemRow);
   }
   const cautela = (await database.select<Cautela[]>(`SELECT * FROM cautelas WHERE id=?`, [id]))[0];
   await enqueueSync("cautelas", id, "create", cautela);
@@ -639,13 +733,22 @@ export async function updateCautela(
       data.data_emissao, data.observacao_geral ?? null, id,
     ]
   );
+  const oldItems = await database.select<{ id: string }[]>(
+    `SELECT id FROM cautela_itens WHERE cautela_id=?`, [id]
+  );
   await database.execute(`DELETE FROM cautela_itens WHERE cautela_id=?`, [id]);
+  for (const old of oldItems) {
+    await enqueueSync("cautela_itens", old.id, "delete", { id: old.id });
+  }
   for (const item of data.itens) {
+    const itemId = uuidv4();
     await database.execute(
       `INSERT INTO cautela_itens (id, cautela_id, produto_id, quantidade, observacao, criado_por)
        VALUES (?,?,?,?,?,?)`,
-      [uuidv4(), id, item.produto_id, item.quantidade, item.observacao ?? null, usuarioId]
+      [itemId, id, item.produto_id, item.quantidade, item.observacao ?? null, usuarioId]
     );
+    const itemRow = (await database.select<CautelaItem[]>(`SELECT * FROM cautela_itens WHERE id=?`, [itemId]))[0];
+    await enqueueSync("cautela_itens", itemId, "create", itemRow);
   }
   const updated = (await database.select<Cautela[]>(`SELECT * FROM cautelas WHERE id=?`, [id]))[0];
   await enqueueSync("cautelas", id, "update", updated);
@@ -689,7 +792,6 @@ export async function getRelatorioCliente(
      WHERE c.cliente_id = ?
        AND c.data_emissao >= ? AND c.data_emissao <= ?
        AND c.deletado_em IS NULL AND c.status != 'rascunho'
-       AND ci.deletado_em IS NULL
      GROUP BY p.id, p.nome, p.codigo_interno, p.unidade_medida
      ORDER BY p.nome`,
     [clienteId, dataInicio, dataFim]
@@ -705,6 +807,67 @@ export async function getRelatorioCliente(
   return { itens, cautelas };
 }
 
+export interface RelatorioReciboItem {
+  produto_id: string;
+  produto_nome: string;
+  codigo_interno: string | null;
+  unidade_medida: string;
+  quantidade_total: number;
+  valor_total: number;
+  num_recibos: number;
+}
+
+export interface RelatorioClienteRecibo {
+  id: string;
+  numero: string;
+  data: string;
+  forma_pagamento: string;
+  forma_pagamento_outro: string | null;
+  total_geral: number;
+  status: string;
+}
+
+export interface RelatorioRecibos {
+  itens: RelatorioReciboItem[];
+  recibos: RelatorioClienteRecibo[];
+  total_periodo: number;
+}
+
+export async function getRelatorioRecibos(
+  clienteId: string,
+  dataInicio: string,
+  dataFim: string
+): Promise<RelatorioRecibos> {
+  const database = await getDb();
+  const itens = await database.select<RelatorioReciboItem[]>(
+    `SELECT p.id as produto_id, p.nome as produto_nome, p.codigo_interno, p.unidade_medida,
+            SUM(ri.quantidade) as quantidade_total,
+            SUM(ri.valor_total) as valor_total,
+            COUNT(DISTINCT r.id) as num_recibos
+     FROM recibo_itens ri
+     JOIN recibos r ON r.id = ri.recibo_id
+     JOIN produtos p ON p.id = ri.produto_id
+     WHERE r.cliente_id = ?
+       AND r.data >= ? AND r.data <= ?
+       AND r.deletado_em IS NULL AND r.status = 'emitido'
+     GROUP BY p.id, p.nome, p.codigo_interno, p.unidade_medida
+     ORDER BY p.nome`,
+    [clienteId, dataInicio, dataFim]
+  );
+  const recibos = await database.select<RelatorioClienteRecibo[]>(
+    `SELECT id, numero, data, forma_pagamento, forma_pagamento_outro, total_geral, status
+     FROM recibos
+     WHERE cliente_id = ? AND data >= ? AND data <= ?
+       AND deletado_em IS NULL
+     ORDER BY data DESC`,
+    [clienteId, dataInicio, dataFim]
+  );
+  const total_periodo = recibos
+    .filter((r) => r.status === "emitido")
+    .reduce((s, r) => s + Number(r.total_geral), 0);
+  return { itens, recibos, total_periodo };
+}
+
 export async function finalizarCautela(id: string, usuarioId: string): Promise<void> {
   const database = await getDb();
   await database.execute(
@@ -714,4 +877,163 @@ export async function finalizarCautela(id: string, usuarioId: string): Promise<v
   const updated = (await database.select<Cautela[]>(`SELECT * FROM cautelas WHERE id=?`, [id]))[0];
   await enqueueSync("cautelas", id, "update", updated);
   void usuarioId;
+}
+
+// ---------- RECIBOS ----------
+
+export interface Recibo {
+  id: string;
+  numero: string;
+  data: string;
+  cliente_id: string;
+  usuario_emissor_id: string;
+  forma_pagamento: string;
+  forma_pagamento_outro: string | null;
+  total_geral: number;
+  observacoes: string | null;
+  status: "emitido" | "cancelado";
+  cancelamento_motivo: string | null;
+  cancelado_em: string | null;
+  criado_em: string;
+  atualizado_em: string;
+  deletado_em: string | null;
+  sync_status: "pendente_sync" | "sincronizado" | "erro";
+  sync_at: string | null;
+  criado_por: string | null;
+}
+
+export interface ReciboItem {
+  id: string;
+  recibo_id: string;
+  produto_id: string;
+  quantidade: number;
+  valor_unitario: number;
+  valor_total: number;
+  criado_em: string;
+  criado_por: string | null;
+}
+
+export interface ReciboListItem extends Recibo {
+  cliente_razao_social: string;
+  cliente_cnpj_cpf: string;
+}
+
+export interface ReciboCompleto extends Recibo {
+  cliente: Cliente;
+  itens: Array<ReciboItem & { produto_nome: string; produto_unidade: string; codigo_interno: string | null }>;
+}
+
+export async function proximoNumeroRecibo(): Promise<string> {
+  const database = await getDb();
+  const ano = new Date().getFullYear();
+  const rows = await database.select<{ ultimo_numero: number; ano: number }[]>(
+    `SELECT ultimo_numero, ano FROM sequencias WHERE tipo='recibo'`
+  );
+  const existing = rows[0];
+  let proximo: number;
+  if (!existing || existing.ano !== ano) {
+    proximo = 1;
+    await database.execute(
+      `INSERT OR REPLACE INTO sequencias (tipo, ano, ultimo_numero) VALUES ('recibo',?,?)`,
+      [ano, 1]
+    );
+  } else {
+    proximo = existing.ultimo_numero + 1;
+    await database.execute(
+      `UPDATE sequencias SET ultimo_numero=? WHERE tipo='recibo'`,
+      [proximo]
+    );
+  }
+  return `REC-${ano}-${String(proximo).padStart(5, "0")}`;
+}
+
+export async function createRecibo(
+  data: {
+    cliente_id: string;
+    data: string;
+    forma_pagamento: string;
+    forma_pagamento_outro?: string;
+    observacoes?: string;
+    itens: { produto_id: string; quantidade: number; valor_unitario: number }[];
+  },
+  usuarioId: string
+): Promise<Recibo> {
+  const database = await getDb();
+  const numero = await proximoNumeroRecibo();
+  const id = uuidv4();
+  const total_geral = data.itens.reduce((acc, i) => acc + i.quantidade * i.valor_unitario, 0);
+
+  await database.execute(
+    `INSERT INTO recibos (id, numero, data, cliente_id, usuario_emissor_id,
+       forma_pagamento, forma_pagamento_outro, total_geral, observacoes, criado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id, numero, data.data, data.cliente_id, usuarioId,
+      data.forma_pagamento, data.forma_pagamento_outro ?? null,
+      total_geral, data.observacoes ?? null, usuarioId,
+    ]
+  );
+
+  for (const item of data.itens) {
+    await database.execute(
+      `INSERT INTO recibo_itens (id, recibo_id, produto_id, quantidade, valor_unitario, valor_total, criado_por)
+       VALUES (?,?,?,?,?,?,?)`,
+      [uuidv4(), id, item.produto_id, item.quantidade, item.valor_unitario, item.quantidade * item.valor_unitario, usuarioId]
+    );
+  }
+
+  const recibo = (await database.select<Recibo[]>(`SELECT * FROM recibos WHERE id=?`, [id]))[0];
+  await enqueueSync("recibos", id, "create", recibo);
+  return recibo;
+}
+
+export async function listRecibos(filtro?: { busca?: string; status?: string }): Promise<ReciboListItem[]> {
+  const database = await getDb();
+  const q = filtro?.busca ? `%${filtro.busca}%` : "%";
+  const statusFilter = filtro?.status ?? null;
+  if (statusFilter) {
+    return database.select<ReciboListItem[]>(
+      `SELECT r.*, cl.razao_social as cliente_razao_social, cl.cnpj_cpf as cliente_cnpj_cpf
+       FROM recibos r JOIN clientes cl ON cl.id = r.cliente_id
+       WHERE r.deletado_em IS NULL AND r.status=? AND (r.numero LIKE ? OR cl.razao_social LIKE ?)
+       ORDER BY r.criado_em DESC`,
+      [statusFilter, q, q]
+    );
+  }
+  return database.select<ReciboListItem[]>(
+    `SELECT r.*, cl.razao_social as cliente_razao_social, cl.cnpj_cpf as cliente_cnpj_cpf
+     FROM recibos r JOIN clientes cl ON cl.id = r.cliente_id
+     WHERE r.deletado_em IS NULL AND (r.numero LIKE ? OR cl.razao_social LIKE ?)
+     ORDER BY r.criado_em DESC`,
+    [q, q]
+  );
+}
+
+export async function getReciboCompleto(id: string): Promise<ReciboCompleto | null> {
+  const database = await getDb();
+  const recibos = await database.select<Recibo[]>(
+    `SELECT * FROM recibos WHERE id=? AND deletado_em IS NULL LIMIT 1`,
+    [id]
+  );
+  if (!recibos[0]) return null;
+  const recibo = recibos[0];
+  const cliente = await getClienteById(recibo.cliente_id);
+  const itens = await database.select<(ReciboItem & { produto_nome: string; produto_unidade: string; codigo_interno: string | null })[]>(
+    `SELECT ri.*, p.nome as produto_nome, p.unidade_medida as produto_unidade, p.codigo_interno
+     FROM recibo_itens ri JOIN produtos p ON p.id = ri.produto_id
+     WHERE ri.recibo_id=?`,
+    [id]
+  );
+  return { ...recibo, cliente: cliente!, itens };
+}
+
+export async function cancelarRecibo(id: string, motivo: string): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    `UPDATE recibos SET status='cancelado', cancelamento_motivo=?, cancelado_em=datetime('now'),
+       sync_status='pendente_sync' WHERE id=? AND status='emitido'`,
+    [motivo, id]
+  );
+  const updated = (await database.select<Recibo[]>(`SELECT * FROM recibos WHERE id=?`, [id]))[0];
+  await enqueueSync("recibos", id, "update", updated);
 }

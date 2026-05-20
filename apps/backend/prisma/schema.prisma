@@ -141,3 +141,43 @@ model CautelaItem {
 
   @@map("cautela_itens")
 }
+
+model Recibo {
+  id                    String       @id
+  numero                String       @unique
+  data                  String
+  cliente_id            String?
+  usuario_emissor_id    String?
+  forma_pagamento       String?
+  forma_pagamento_outro String?
+  total_geral           Float        @default(0)
+  observacoes           String?
+  status                String       @default("emitido")
+  cancelamento_motivo   String?
+  cancelado_em          String?
+  criado_em             String
+  atualizado_em         String
+  deletado_em           String?
+  sync_status           String       @default("pendente_sync")
+  sync_at               String?
+  criado_por            String?
+
+  itens                 ReciboItem[]
+
+  @@map("recibos")
+}
+
+model ReciboItem {
+  id             String  @id
+  recibo_id      String
+  produto_id     String?
+  quantidade     Float
+  valor_unitario Float
+  valor_total    Float
+  criado_em      String
+  criado_por     String?
+
+  recibo         Recibo  @relation(fields: [recibo_id], references: [id])
+
+  @@map("recibo_itens")
+}

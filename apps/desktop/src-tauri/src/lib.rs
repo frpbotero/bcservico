@@ -1,7 +1,7 @@
 mod commands;
 
 use commands::auth::{hash_password, verify_password};
-use commands::pdf::generate_pdf;
+use commands::pdf::{generate_pdf, generate_pdf_recibo};
 use commands::sync::trigger_sync;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,6 +16,7 @@ pub fn run() {
             verify_password,
             trigger_sync,
             generate_pdf,
+            generate_pdf_recibo,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

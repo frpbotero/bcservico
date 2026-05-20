@@ -15,6 +15,8 @@ import ProdutosPage from "@/pages/ProdutosPage";
 import ProdutoFormPage from "@/pages/ProdutoFormPage";
 import CautelasPage from "@/pages/CautelasPage";
 import CautelaFormPage from "@/pages/CautelaFormPage";
+import RecibosPage from "@/pages/RecibosPage";
+import ReciboFormPage from "@/pages/ReciboFormPage";
 import RelatoriosPage from "@/pages/RelatoriosPage";
 
 function AuthGuard({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
@@ -76,6 +78,8 @@ export default function App() {
           <Route path="cautelas" element={<CautelasPage />} />
           <Route path="cautelas/nova" element={<CautelaFormPage />} />
           <Route path="cautelas/:id/editar" element={<CautelaFormPage />} />
+          <Route path="recibos" element={<RecibosPage />} />
+          <Route path="recibos/novo" element={<ReciboFormPage />} />
           <Route path="relatorios" element={<RelatoriosPage />} />
           <Route
             path="usuarios"
