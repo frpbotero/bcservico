@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EmpresaEmissora {
+  id            String  @id
+  razao_social  String
+  nome_fantasia String?
+  cnpj          String
+  logradouro    String  @default("")
+  numero        String  @default("")
+  complemento   String?
+  bairro        String  @default("")
+  cidade        String  @default("")
+  uf            String  @default("")
+  cep           String  @default("")
+  telefones     String?
+  email         String?
+  logotipo      String?
+  texto_rodape  String?
+  criado_em     String
+  atualizado_em String
+  deletado_em   String?
+  sync_status   String  @default("pendente_sync")
+  sync_at       String?
+  criado_por    String?
+
+  @@map("empresa_emissora")
+}
+
+model Usuario {
+  id            String  @id
+  nome_completo String
+  login         String  @unique
+  senha_hash    String
+  perfil        String
+  status        String  @default("ativo")
+  email         String?
+  criado_em     String
+  atualizado_em String
+  deletado_em   String?
+  sync_status   String  @default("pendente_sync")
+  sync_at       String?
+  criado_por    String?
+
+  @@map("usuarios")
+}
+
+model Cliente {
+  id            String    @id
+  razao_social  String
+  cnpj_cpf      String    @unique
+  logradouro    String    @default("")
+  numero        String    @default("")
+  complemento   String?
+  bairro        String    @default("")
+  cidade        String    @default("")
+  uf            String    @default("")
+  cep           String    @default("")
+  telefones     String?
+  email         String?
+  nome_contato  String?
+  observacoes   String?
+  status        String    @default("ativo")
+  criado_em     String
+  atualizado_em String
+  deletado_em   String?
+  sync_status   String    @default("pendente_sync")
+  sync_at       String?
+  criado_por    String?
+
+  cautelas      Cautela[]
+
+  @@map("clientes")
+}
+
+model Produto {
+  id               String        @id
+  nome             String
+  codigo_interno   String?
+  descricao        String?
+  unidade_medida   String        @default("Un")
+  preco_referencia Float?
+  status           String        @default("ativo")
+  criado_em        String
+  atualizado_em    String
+  deletado_em      String?
+  sync_status      String        @default("pendente_sync")
+  sync_at          String?
+  criado_por       String?
+
+  cautela_itens    CautelaItem[]
+
+  @@map("produtos")
+}
+
+model Cautela {
+  id                     String        @id
+  numero                 String        @unique
+  data_emissao           String
+  cliente_id             String
+  nome_destinatario      String
+  cargo_destinatario     String?
+  usuario_emissor_id     String
+  observacao_geral       String?
+  status                 String        @default("rascunho")
+  assinatura_nome        String?
+  assinatura_cargo       String?
+  assinatura_imagem      String?
+  assinatura_coletada_em String?
+  assinatura_operador_id String?
+  criado_em              String
+  atualizado_em          String
+  deletado_em            String?
+  sync_status            String        @default("pendente_sync")
+  sync_at                String?
+  criado_por             String?
+
+  cliente                Cliente       @relation(fields: [cliente_id], references: [id])
+  itens                  CautelaItem[]
+
+  @@map("cautelas")
+}
+
+model CautelaItem {
+  id         String  @id
+  cautela_id String
+  produto_id String
+  quantidade Float
+  observacao String?
+  criado_em  String
+  criado_por String?
+
+  cautela    Cautela @relation(fields: [cautela_id], references: [id])
+  produto    Produto @relation(fields: [produto_id], references: [id])
+
+  @@map("cautela_itens")
+}
