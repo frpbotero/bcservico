@@ -42,6 +42,10 @@ pub fn generate_pdf(payload: PdfPayload) -> Result<Vec<u8>, String> {
 
     let current_layer = doc.get_page(page1).get_layer(layer1);
 
+    // Garante cor preta para texto e linhas (sem isso o PDF fica em branco)
+    current_layer.set_fill_color(Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None)));
+    current_layer.set_outline_color(Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None)));
+
     let font = doc
         .add_builtin_font(BuiltinFont::HelveticaBold)
         .map_err(|e| e.to_string())?;
@@ -285,6 +289,11 @@ pub fn generate_pdf_recibo(payload: PdfReciboPayload) -> Result<Vec<u8>, String>
     );
 
     let current_layer = doc.get_page(page1).get_layer(layer1);
+
+    // Garante cor preta para texto e linhas (sem isso o PDF fica em branco)
+    current_layer.set_fill_color(Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None)));
+    current_layer.set_outline_color(Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None)));
+
     let font = doc.add_builtin_font(BuiltinFont::HelveticaBold).map_err(|e| e.to_string())?;
     let font_regular = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| e.to_string())?;
 

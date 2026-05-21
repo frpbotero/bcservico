@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { initDb } from "@/lib/db";
+import { initDb, getAppConfig } from "@/lib/db";
 import { useAuthStore } from "@/store/authStore";
 import AppShell from "@/components/layout/AppShell";
 import LoginPage from "@/pages/LoginPage";
@@ -18,11 +18,52 @@ import CautelaFormPage from "@/pages/CautelaFormPage";
 import RecibosPage from "@/pages/RecibosPage";
 import ReciboFormPage from "@/pages/ReciboFormPage";
 import RelatoriosPage from "@/pages/RelatoriosPage";
+import OnboardingPage from "@/pages/OnboardingPage";
+import AjudaPage from "@/pages/AjudaPage";
 
 function AuthGuard({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
   const { usuario } = useAuthStore();
   if (!usuario) return <Navigate to="/login" replace />;
   if (adminOnly && usuario.perfil !== "admin") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+// Rotas permitidas durante o setup (para o usuário configurar sem ser redirecionado de volta)
+const SETUP_PATHS = ["/configuracoes", "/produtos", "/clientes"];
+
+function OnboardingRedirect({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!usuario) { setChecked(true); return; }
+
+    // Permite acesso às páginas de setup mesmo com onboarding pendente
+    const emRotaSetup = SETUP_PATHS.some((p) => location.pathname.startsWith(p));
+    if (emRotaSetup) { setChecked(true); return; }
+
+    Promise.all([
+      getAppConfig("onboarding_completo"),
+      getAppConfig(`onboarding_visto_${usuario.id}`),
+    ])
+      .then(([completo, visto]) => {
+        if (completo !== "1" || visto !== "1") {
+          navigate("/onboarding", { replace: true });
+        }
+        setChecked(true);
+      })
+      .catch(() => setChecked(true));
+  }, []);
+
+  if (!checked) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-muted-foreground text-sm">Carregando...</p>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
 
@@ -61,10 +102,20 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
+          path="/onboarding"
+          element={
+            <AuthGuard>
+              <OnboardingPage />
+            </AuthGuard>
+          }
+        />
+        <Route
           path="/"
           element={
             <AuthGuard>
-              <AppShell />
+              <OnboardingRedirect>
+                <AppShell />
+              </OnboardingRedirect>
             </AuthGuard>
           }
         >
@@ -81,6 +132,7 @@ export default function App() {
           <Route path="recibos" element={<RecibosPage />} />
           <Route path="recibos/novo" element={<ReciboFormPage />} />
           <Route path="relatorios" element={<RelatoriosPage />} />
+          <Route path="ajuda" element={<AjudaPage />} />
           <Route
             path="usuarios"
             element={

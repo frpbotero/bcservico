@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   FileBarChart2,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
@@ -27,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/cautelas", icon: <ClipboardList size={18} />, label: "Cautelas" },
   { to: "/recibos", icon: <Receipt size={18} />, label: "Recibos" },
   { to: "/relatorios", icon: <FileBarChart2 size={18} />, label: "Relatórios" },
+  { to: "/ajuda", icon: <HelpCircle size={18} />, label: "Ajuda" },
   { to: "/usuarios", icon: <UserCog size={18} />, label: "Usuários", adminOnly: true },
   { to: "/configuracoes", icon: <Settings size={18} />, label: "Configurações", adminOnly: true },
 ];

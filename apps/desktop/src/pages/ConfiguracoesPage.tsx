@@ -6,7 +6,7 @@ import { IMaskInput } from "react-imask";
 import { toast } from "sonner";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { getEmpresa, saveEmpresa, forcarResyncCompleto } from "@/lib/db";
+import { getEmpresa, saveEmpresa, forcarResyncCompleto, setAppConfig } from "@/lib/db";
 import { getSyncConfig, saveSyncConfig, testarConexao, executarSync } from "@/lib/sync";
 import { useAuthStore } from "@/store/authStore";
 import { useSyncStore } from "@/store/syncStore";
@@ -98,9 +98,11 @@ export default function ConfiguracoesPage() {
       await testarConexao(backendUrl, backendLogin, backendSenha);
       setBackendTestResult("ok");
       setBackendTestMsg("Conexão estabelecida com sucesso.");
+      await setAppConfig("sync_backend_ok", "1");
     } catch (e) {
       setBackendTestResult("erro");
       setBackendTestMsg(String(e instanceof Error ? e.message : e));
+      await setAppConfig("sync_backend_ok", "0");
     } finally {
       setTestingBackend(false);
     }
@@ -129,6 +131,10 @@ export default function ConfiguracoesPage() {
     setSavingBackend(true);
     try {
       await saveSyncConfig({ backend_url: backendUrl, backend_login: backendLogin, backend_senha: backendSenha });
+      // Se salvou sem testar (ou resultado não era ok), invalida a flag
+      if (backendTestResult !== "ok") {
+        await setAppConfig("sync_backend_ok", "0");
+      }
       toast.success("Configuração do backend salva");
     } catch (e) {
       toast.error("Erro ao salvar: " + String(e));

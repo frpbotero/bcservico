@@ -210,6 +210,13 @@ CREATE TABLE IF NOT EXISTS sync_config (
 INSERT OR IGNORE INTO sync_config (id, backend_url, backend_login, backend_senha, last_pull_at)
 VALUES ('default', 'https://bcservico.onrender.com', '', '', '1970-01-01T00:00:00.000Z');
 
+CREATE TABLE IF NOT EXISTS app_config (
+  chave TEXT PRIMARY KEY,
+  valor TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO app_config (chave, valor) VALUES ('onboarding_completo', '0');
+
 CREATE INDEX IF NOT EXISTS idx_cautelas_status ON cautelas(status);
 CREATE INDEX IF NOT EXISTS idx_cautelas_cliente ON cautelas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_cautela_itens_cautela ON cautela_itens(cautela_id);
@@ -1036,4 +1043,23 @@ export async function cancelarRecibo(id: string, motivo: string): Promise<void> 
   );
   const updated = (await database.select<Recibo[]>(`SELECT * FROM recibos WHERE id=?`, [id]))[0];
   await enqueueSync("recibos", id, "update", updated);
+}
+
+// ---------- APP CONFIG ----------
+
+export async function getAppConfig(chave: string): Promise<string | null> {
+  const database = await getDb();
+  const rows = await database.select<{ valor: string }[]>(
+    `SELECT valor FROM app_config WHERE chave=?`,
+    [chave]
+  );
+  return rows[0]?.valor ?? null;
+}
+
+export async function setAppConfig(chave: string, valor: string): Promise<void> {
+  const database = await getDb();
+  await database.execute(
+    `INSERT OR REPLACE INTO app_config (chave, valor) VALUES (?,?)`,
+    [chave, valor]
+  );
 }

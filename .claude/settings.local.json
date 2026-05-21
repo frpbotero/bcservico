@@ -20,7 +20,19 @@
       "Bash(npx tauri *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Felipe Botero\\\\Documents\\\\EU\\\\Pai\\\\App_cautelas\\\\apps\\\\backend\" -Recurse -Depth 3)",
       "Bash(Select-Object FullName, PSIsContainer)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(dir \"%APPDATA%\\\\com.cautelas.app\")",
+      "Bash(dir \"%LOCALAPPDATA%\\\\com.cautelas.app\")",
+      "Bash(dir \"%APPDATA%\\\\br.com.cautelas\")",
+      "Bash(dir \"%LOCALAPPDATA%\\\\br.com.cautelas\")",
+      "Bash(dir \"%APPDATA%\\\\cautelas\")",
+      "Bash(dir \"%APPDATA%\\\\App Cautelas\")",
+      "Bash(dir \"%APPDATA%\")",
+      "Bash(findstr -i \"cautela\")",
+      "Bash(dir \"%LOCALAPPDATA%\")"
     ]
   }
 }
